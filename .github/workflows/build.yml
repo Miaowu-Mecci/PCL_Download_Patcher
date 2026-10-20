@@ -1,69 +1,81 @@
-name: Build
+name: Build Download Patcher
+
 on:
   push:
+    branches: [main]
     paths:
-      - 'Plain Craft Launcher 2/**'
-      - '.github/workflows/**'
-  pull_request:
-    paths:
-      - 'Plain Craft Launcher 2/**'
-      - '.github/workflows/**'
+      - '*.cs'
+      - '*.csproj'
+      - 'patch.bin'
+      - 'README.md'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-download-patcher
+  cancel-in-progress: false
 
 jobs:
   build:
-    name: Build
     runs-on: windows-latest
-    strategy:  
-       matrix:  
-         configuration: [Debug, Release]
-
+    timeout-minutes: 15
     steps:
-
-    - name: Checkout
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 1
-        submodules: true
-
-    - name: Set Describe
-      shell: bash
-      run: |
-          describe=`git describe --tags --always`
-          echo "describe=$describe" >> $GITHUB_ENV
-
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v3
-      with:
-        msbuild-architecture: x64
-    
-    - name: Update Help
-      run:  |
-        Set-Location ..
-        git clone https://github.com/LTCatt/PCL2Help.git -b master --single-branch --depth 1
-        Set-Location PCL2Help
-        Remove-Item -Path *.* -Recurse -Force
-        Compress-Archive -Path .\* -DestinationPath .\Help.zip
-        Copy-Item -Path .\Help.zip -Destination "${{ GITHUB.WORKSPACE }}\Plain Craft Launcher 2\Resources\Help.zip" -Force
-        Set-Location ..
-        Remove-Item PCL2Help -Recurse -Force
-        Set-Location ${{ GITHUB.WORKSPACE }}
-
-
-    - name: Replace
-      run: |
-        (gc "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "")', 'Public OAuthClientId As String = If(Environment.GetEnvironmentVariable("PCL_MS_CLIENT_ID"), "${{ secrets.CLIENT_ID }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb"
-        (gc "Plain Craft Launcher 2\Modules\ModSecret.vb") -replace 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "")', 'Public CurseForgeAPIKey As String = If(Environment.GetEnvironmentVariable("PCL_CURSEFORGE_API_KEY"), "${{ secrets.CURSEFORGE_API_KEY }}")' | Out-File "Plain Craft Launcher 2\Modules\ModSecret.vb"
-        (gc "Plain Craft Launcher 2\Modules\Base\ModBase.vb") -replace 'Public Const CommitHash As String = ""', 'Public Const CommitHash As String = "${{ github.sha }}"' | Out-File "Plain Craft Launcher 2\Modules\Base\ModBase.vb"
-        
-    - name: Restore NuGet Packages
-      run: dotnet restore PCLCS\PCLCS.csproj
-
-    - name: Build
-      run: msbuild "Plain Craft Launcher 2\Plain Craft Launcher 2.vbproj" -p:Configuration=${{ matrix.configuration }}
-
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: ${{ matrix.configuration }} ${{ env.describe }}
-        path: Plain Craft Launcher 2\obj\${{ matrix.configuration }}\Plain Craft Launcher 2.exe
+      - uses: actions/checkout@v6
+      - uses: microsoft/setup-msbuild@v3
+      - name: Build standalone patcher
+        run: msbuild PclDownloadPatcher.csproj /p:Configuration=Release /nologo
+      - name: Test patching and backup behavior
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'bin/Release/PCL-myPCL-DownloadPatcher.exe'
+          $report = Join-Path $PWD 'patcher-tests.txt'
+          $process = Start-Process -FilePath $exe -ArgumentList '--self-test', $report -Wait -PassThru
+          if (Test-Path $report) { Get-Content -Encoding utf8 $report }
+          if ($process.ExitCode -ne 0) { throw "Patcher tests failed: $($process.ExitCode)" }
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item dist -ItemType Directory -Force | Out-Null
+          Copy-Item bin/Release/PCL-myPCL-DownloadPatcher.exe dist/
+          Copy-Item README.md dist/README.md
+          Compress-Archive -Path dist/PCL-myPCL-DownloadPatcher.exe, dist/README.md -DestinationPath dist/PCL-myPCL-DownloadPatcher-v1.0.0.zip
+          Get-ChildItem dist -File | Where-Object Extension -in '.exe', '.zip' | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content dist/SHA256SUMS.txt -Encoding ascii
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PCL-myPCL-DownloadPatcher
+          path: |
+            dist/*
+            patcher-tests.txt
+      - name: Publish tested Windows patcher
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          $tag = 'pcl-download-patcher-v1.0.0'
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist/PCL-myPCL-DownloadPatcher.exe dist/PCL-myPCL-DownloadPatcher-v1.0.0.zip dist/SHA256SUMS.txt --clobber
+          } else {
+            gh release create $tag dist/PCL-myPCL-DownloadPatcher.exe dist/PCL-myPCL-DownloadPatcher-v1.0.0.zip dist/SHA256SUMS.txt --target $env:GITHUB_SHA --title 'PCL myPCL 一次性下载修复补丁 v1.0.0' --notes-file README.md --latest
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release publishing failed' }
+      - name: Remove superseded launcher release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          gh release view v2.99.0-myPCL.1 *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete v2.99.0-myPCL.1 --yes --cleanup-tag
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to remove superseded launcher release' }
+          }
+          exit 0
