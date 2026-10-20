@@ -1,13 +1,13 @@
 # Plain Craft Launcher (PCL) myPCL 一次性下载修复补丁
 
-本仓库仅包含独立的 Windows 修复补丁及其源码和构建流程。
+独立的 Windows 第三方修复工具，用于恢复已适配官方 PCL 2.99.0.0 的原版下载、整合包安装和相关入口。选择原程序并完成一次修复后，以后直接启动 PCL 即可。
 
-请使用本仓库发布的 `PCL-myPCL-DownloadPatcher.exe`。一次性补丁的入口为 `Program.cs`，文件修复逻辑位于 `PatchEngine.cs`，内嵌修复配方为 `patch.bin`。名为 `PCL下载修复.exe`、附带 `Injector.cs` 的注入式工具不是本仓库的一次性文件修复补丁。
-
-第三方工具，恢复已适配官方 PCL 2.99.0.0 的原版下载、整合包安装和相关入口。
+本仓库提供补丁源码、内嵌修复配方及 Windows 构建流程。
 原作者：龙腾猫跃；[原项目](https://github.com/Meloong-Git/PCL)，[赞助原作者](https://meloong.com/afd/a/LTCat)。
 
-## 使用
+## 下载与使用
+
+前往 [Releases](https://github.com/Miaowu-Mecci/PCL_Download_Patcher/releases) 下载 `PCL-myPCL-DownloadPatcher.exe`，或下载 ZIP 后解压使用。需要 Windows 和 .NET Framework 4.8，无需 Python 或额外 DLL；修复过程离线运行。
 
 1. 完全退出 PCL，包括托盘图标。
 2. 运行 `PCL-myPCL-DownloadPatcher.exe`，选择官方 PCL 的 EXE。
@@ -17,8 +17,9 @@
 需要还原时，退出 PCL，再用该备份替换修复后的 EXE。
 重复选择已经修复的文件，会提示无需重复操作。
 
-需要 Windows 和 .NET Framework 4.8，无需 Python 或额外 DLL。
 补丁离线运行，不启动 PCL、不注入进程。文件正在运行、只读、被锁定或版本不匹配时会停止修改。
+
+如果提示没有写入权限，请将 PCL 移到有写入权限的文件夹后重试。提示版本不匹配时，请核对下方原文件哈希；仅版本号相同不足以确认适配。
 
 ## 适配与验证
 
@@ -37,6 +38,17 @@
 
 ## 构建与测试
 
+仓库主要文件：
+
+| 文件 | 用途 |
+| --- | --- |
+| `Program.cs` | Windows 界面与程序入口 |
+| `PatchEngine.cs` | 原文件校验、修复、备份与替换 |
+| `patch.bin` | 内嵌 COPY/INSERT 修复配方 |
+| `SelfTests.cs` | 补丁行为自测 |
+| `PclDownloadPatcher.csproj` | .NET Framework 4.8 项目 |
+| `.github/workflows/build.yml` | Windows 构建、测试与发布流程 |
+
 在具有 .NET Framework 4.8 开发工具的 Windows 上：
 
 ```powershell
@@ -46,3 +58,5 @@ Get-Content patcher-tests.txt
 ```
 
 自测涵盖修复、备份、重复运行、未知文件、已有备份、只读、锁定、损坏配方及 GUI 创建。
+
+源码、项目文件、修复配方或构建流程更新时，推送到 `main` 会触发自动构建；也可手动运行工作流。仅修改 README 不触发构建，现有可执行文件保持不变；发布压缩包中的 README 会在下次构建时更新。

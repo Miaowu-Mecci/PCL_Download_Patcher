@@ -7,7 +7,6 @@ on:
       - '*.cs'
       - '*.csproj'
       - 'patch.bin'
-      - 'README.md'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 
