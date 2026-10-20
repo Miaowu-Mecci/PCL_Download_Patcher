@@ -1,0 +1,41 @@
+name: Publish Windows Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-windows-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Publish compiled Windows executable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 39395131387 --name "Release 26799d4" --dir dist
+          test -s "dist/Plain Craft Launcher 2.exe"
+          mv "dist/Plain Craft Launcher 2.exe" "dist/PCL-myPCL-2.99.0-Windows.exe"
+          (cd dist && sha256sum PCL-myPCL-2.99.0-Windows.exe > SHA256SUMS.txt)
+          cat > notes.md <<'NOTES'
+          基于 PCL 2.99.0.0 的第三方修改版，恢复原版 Minecraft 下载、整合包安装及相关入口。
+          应用源码仅将 RestrictMcDownload 从 True 改为 False。
+          Windows Release 配置构建，需安装 .NET Framework 4.8。
+          源码提交：26799d43e5670176e9b7cc41401d6ae01c0ce6c2
+          原作者：龙腾猫跃；原项目：https://github.com/Meloong-Git/PCL
+          原作者赞助：https://meloong.com/afd/a/LTCat
+          NOTES
+          gh release create v2.99.0-myPCL.1 \
+            dist/PCL-myPCL-2.99.0-Windows.exe dist/SHA256SUMS.txt \
+            --target 26799d43e5670176e9b7cc41401d6ae01c0ce6c2 \
+            --title "Plain Craft Launcher (PCL) myPCL 2.99.0 - Windows" \
+            --notes-file notes.md --latest
