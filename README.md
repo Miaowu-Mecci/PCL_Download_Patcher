@@ -2,6 +2,8 @@
 
 本仓库仅包含独立的 Windows 修复补丁及其源码和构建流程。
 
+请使用本仓库发布的 `PCL-myPCL-DownloadPatcher.exe`。一次性补丁的入口为 `Program.cs`，文件修复逻辑位于 `PatchEngine.cs`，内嵌修复配方为 `patch.bin`。名为 `PCL下载修复.exe`、附带 `Injector.cs` 的注入式工具不是本仓库的一次性文件修复补丁。
+
 第三方工具，恢复已适配官方 PCL 2.99.0.0 的原版下载、整合包安装和相关入口。
 原作者：龙腾猫跃；[原项目](https://github.com/Meloong-Git/PCL)，[赞助原作者](https://meloong.com/afd/a/LTCat)。
 
